@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Бросалка Savage Worlds</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!--
+  Прототип интерактивного сообщения для будущих HTMLBubbles в Telegram — бросалка Savage Worlds.
+  Те же принципы, что и в первой бросалке:
+  - только текст, таблицы, рамки; простой CSS под litehtml;
+  - ядро и рендер без document/window, работа с DOM — в адаптере внизу;
+  - статичная разметка в #app — фолбэк на случай ошибки скрипта.
+
+  Правила броска:
+  - XdN кубов навыка + дикий d6, берётся лучший результат;
+  - максимум на кубе — взрыв: перебрасываем и прибавляем, сколько угодно раз;
+  - модификатор прибавляется к итогу (к лучшему кубу);
+  - успех от сложности (по умолчанию 4, при сбросе снова 4), каждые следующие +4 — подъём;
+  - критический провал: на диком кубе 1 и на половине или больше кубов навыка 1.
+-->
+<style>
+  body { margin: 0; padding: 16px; background: #eef1f4; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: #1f2328; }
+  .bubble { max-width: 340px; margin: 0 auto; background: #ffffff; border: 1px solid #d6dbe1; border-radius: 14px; padding: 12px; }
+  .title { font-size: 15px; font-weight: bold; margin: 0 0 8px 0; }
+  .muted { color: #6b7480; font-size: 12px; }
+  .label { color: #6b7480; font-size: 11px; margin: 0 0 4px 0; }
+  .row { margin: 0 0 8px 0; }
+  table.pick { width: 100%; border-collapse: collapse; margin: 0 0 8px 0; }
+  table.pick td { vertical-align: top; padding: 0; }
+  td.wildcell { width: 74px; padding-left: 8px; border-left: 1px solid #e1e5ea; text-align: center; }
+  .btn { display: inline-block; min-width: 34px; padding: 6px 7px; margin: 0 4px 4px 0; border: 1px solid #c9d1da;
+         border-radius: 8px; background: #f6f8fa; font-size: 13px; text-align: center; cursor: pointer; }
+  .btn.on { background: #b8452f; border-color: #b8452f; color: #ffffff; }
+  .btn.small { min-width: 26px; padding: 4px 6px; }
+  .tnlabel { margin-top: 6px; }
+  input.tn { width: 40px; padding: 5px 4px; margin: 0 4px 4px 0; border: 1px solid #c9d1da; border-radius: 8px;
+             font-size: 14px; font-weight: bold; text-align: center; background: #ffffff; color: #1f2328; }
+  .count { display: inline-block; min-width: 28px; text-align: center; font-weight: bold; font-size: 14px; }
+  .wild { display: inline-block; padding: 8px 10px; border: 2px solid #d99a1e; border-radius: 10px;
+          background: #fff6e0; color: #8a5a00; font-weight: bold; font-size: 15px; margin: 0 0 5px 0; cursor: pointer; }
+  .wild.off { border: 1px solid #d6dbe1; background: #f3f4f6; color: #a0a7b0; font-weight: normal; font-size: 13px; padding: 5px 9px; }
+  .divider { border-top: 1px solid #e1e5ea; margin: 3px 0 7px 0; }
+  .d20 { display: inline-block; padding: 7px 8px; border: 1px solid #8a94a3; border-radius: 10px;
+         background: #f6f8fa; color: #1f2328; font-weight: bold; font-size: 14px; cursor: pointer; }
+  .btn.roll { display: block; margin: 4px 0 0 0; padding: 9px; background: #b8452f; border-color: #b8452f;
+              color: #ffffff; font-weight: bold; font-size: 14px; }
+  .pool { padding: 6px 8px; background: #f6f8fa; border-radius: 8px; font-size: 14px; }
+  .result { margin: 10px 0 0 0; padding: 10px; border-radius: 10px; background: #fbf3ef; border: 1px solid #ecd2c8; }
+  .total { font-size: 30px; font-weight: bold; }
+  .verdict { font-size: 14px; font-weight: bold; }
+  .ok { color: #1a9e55; } .fail { color: #6b7480; } .cfail { color: #d1343a; }
+  .line { margin: 4px 0 0 0; font-size: 13px; }
+  .die { display: inline-block; min-width: 20px; padding: 2px 5px; margin: 1px 2px 1px 0; border: 1px solid #c9d1da;
+         border-radius: 6px; background: #ffffff; text-align: center; font-size: 13px; }
+  .die.ace { border-color: #1a9e55; color: #1a9e55; font-weight: bold; }
+  .die.one { border-color: #d1343a; color: #d1343a; }
+  .best { font-weight: bold; }
+  .dim { color: #a0a7b0; }
+  table.footer { width: 100%; border-collapse: collapse; margin: 10px 0 0 0; font-size: 11px; color: #a0a7b0; }
+  table.footer td { padding: 0; vertical-align: top; }
+  td.by { text-align: right; }
+  .footer a, .license a { color: #b8452f; text-decoration: none; }
+  .toggle { cursor: pointer; color: #8a94a3; }
+  .license { margin: 5px 0 0 0; padding: 6px 8px; background: #f6f8fa; border-radius: 8px; font-size: 11px;
+             line-height: 1.4; color: #6b7480; }
+  .hist { margin: 8px 0 0 0; font-size: 12px; color: #6b7480; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Фолбэк: виден, если JavaScript не запустился -->
+  <div class="bubble">
+    <div class="title">🎲 Savage Worlds</div>
+    <div class="muted">Интерактивное сообщение. Обновите Telegram, чтобы бросать кубы прямо здесь.</div>
+  </div>
+</div>
+
+<script>
+/* ===================== ЯДРО (без DOM, переносится как есть) ===================== */
+
+var SIDES = [4, 6, 8, 10, 12];
+var WILDS = [6, 8, 10]; // обычно d6, но бывает d8 или d10
+var MAX_EXPLODES = 50; // страховка от бесконечного цикла
+
+function initialState() {
+  return { sides: 8, count: 1, mod: 0, wild: 6, tn: 4, license: false, last: null, history: [] };
+}
+
+function randInt(sides) {
+  try {
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+      var buf = new Uint32Array(1), limit = Math.floor(4294967296 / sides) * sides;
+      do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+      return (buf[0] % sides) + 1;
+    }
+  } catch (e) {}
+  return Math.floor(Math.random() * sides) + 1;
+}
+
+// Взрывающийся куб: возвращает все выпавшие значения цепочки
+function explode(sides) {
+  var chain = [], v;
+  do { v = randInt(sides); chain.push(v); } while (v === sides && chain.length < MAX_EXPLODES);
+  return chain;
+}
+
+function sum(arr) { var s = 0; for (var i = 0; i < arr.length; i++) s += arr[i]; return s; }
+
+function modText(mod) { return mod > 0 ? " + " + mod : mod < 0 ? " − " + (-mod) : ""; }
+
+function formula(state) {
+  return state.count + "d" + state.sides + modText(state.mod) + " + дикий d" + state.wild + " · сложность " + state.tn;
+}
+
+function roll(state) {
+  var dice = [];
+  for (var i = 0; i < state.count; i++) {
+    var c = explode(state.sides);
+    dice.push({ sides: state.sides, chain: c, total: sum(c), wild: false });
+  }
+  var w = explode(state.wild);
+  dice.push({ sides: state.wild, chain: w, total: sum(w), wild: true });
+
+  var best = 0;
+  for (var j = 1; j < dice.length; j++) if (dice[j].total > dice[best].total) best = j;
+
+  var ones = 0;
+  for (var k = 0; k < state.count; k++) if (dice[k].chain[0] === 1) ones++;
+  var critFail = w[0] === 1 && ones * 2 >= state.count;
+
+  var top = dice[best].total + state.mod, raises = top >= state.tn ? Math.floor((top - state.tn) / 4) : 0;
+  var result = { formula: formula(state), dice: dice, best: best, base: dice[best].total, mod: state.mod, total: top,
+                 tn: state.tn, success: top >= state.tn, raises: raises, critFail: critFail };
+  return { sides: state.sides, count: state.count, mod: state.mod, wild: state.wild, tn: state.tn, license: state.license, last: result,
+           history: [result].concat(state.history).slice(0, 5) };
+}
+
+// Просто d20 для таблиц: без взрывов, дикого кубика и вердикта
+function rollD20(state) {
+  var v = randInt(20);
+  var result = { kind: "d20", formula: "1d20" + modText(state.mod), value: v, mod: state.mod, total: v + state.mod };
+  return { sides: state.sides, count: state.count, mod: state.mod, wild: state.wild, tn: state.tn, license: state.license, last: result,
+           history: [result].concat(state.history).slice(0, 5) };
+}
+
+function reduce(state, action, arg) {
+  var s = { sides: state.sides, count: state.count, mod: state.mod, wild: state.wild, tn: state.tn, license: state.license, last: state.last, history: state.history };
+  if (action === "sides") s.sides = Number(arg);
+  if (action === "license") s.license = !s.license;
+  if (action === "wild") s.wild = Number(arg);
+  if (action === "count") s.count = Math.max(1, Math.min(6, s.count + Number(arg)));
+  if (action === "mod") s.mod = Math.max(-10, Math.min(10, s.mod + Number(arg)));
+  if (action === "tn") s.tn = Math.max(1, Math.min(99, s.tn + Number(arg)));
+  if (action === "tnset") { var v = Math.round(Number(arg)); if (arg !== "" && !isNaN(v)) s.tn = Math.max(1, Math.min(99, v)); }
+  if (action === "clear") { s.count = 1; s.mod = 0; s.tn = 4; s.last = null; }
+  if (action === "roll") return roll(s);
+  if (action === "d20") return rollD20(s);
+  return s;
+}
+
+function esc(t) { return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+
+function verdict(r) {
+  if (r.critFail) return '<span class="verdict cfail">Критический провал!</span>';
+  if (!r.success) return '<span class="verdict fail">Провал</span>';
+  if (!r.raises) return '<span class="verdict ok">Успех</span>';
+  return '<span class="verdict ok">Успех + ' + r.raises + (r.raises === 1 ? " подъём" : r.raises < 5 ? " подъёма" : " подъёмов") + "</span>";
+}
+
+function dieLine(d, isBest) {
+  var h = '<div class="line' + (isBest ? " best" : " dim") + '">' + (d.wild ? "Дикий d" : "d") + d.sides + ": ";
+  for (var i = 0; i < d.chain.length; i++) {
+    var v = d.chain[i], cls = "die";
+    if (v === d.sides) cls += " ace"; else if (i === 0 && v === 1) cls += " one";
+    h += (i ? "+" : "") + '<span class="' + cls + '">' + v + "</span>";
+  }
+  if (d.chain.length > 1) h += " = " + d.total;
+  if (d.chain.length > 1) h += " 💥";
+  return h + "</div>";
+}
+
+function render(state) {
+  var h = '<div class="bubble"><div class="title">🎲 Savage Worlds</div>';
+
+  h += '<table class="pick"><tr><td>';
+  h += '<div class="label">Кубы навыка</div><div class="row">';
+  h += '<span class="btn small" data-act="count" data-arg="-1">−</span><span class="count">' + state.count +
+       '</span><span class="btn small" data-act="count" data-arg="1">+</span></div><div>';
+  for (var i = 0; i < SIDES.length; i++) {
+    h += '<span class="btn' + (state.sides === SIDES[i] ? " on" : "") + '" data-act="sides" data-arg="' + SIDES[i] +
+         '">d' + SIDES[i] + "</span>";
+  }
+  h += '</div><div class="label tnlabel">Сложность</div><div>' +
+       '<span class="btn small" data-act="tn" data-arg="-1">−</span>' +
+       '<input class="tn" type="number" min="1" max="99" data-input="tn" value="' + state.tn + '">' +
+       '<span class="btn small" data-act="tn" data-arg="1">+</span></div>';
+  h += '</td><td class="wildcell"><div class="label">Дикий</div>';
+  for (var w = 0; w < WILDS.length; w++) {
+    h += '<span class="wild' + (state.wild === WILDS[w] ? "" : " off") + '" data-act="wild" data-arg="' + WILDS[w] +
+         '">d' + WILDS[w] + "</span>";
+  }
+  h += '<div class="divider"></div><div class="label">Таблица</div>' +
+       '<span class="d20" data-act="d20" data-arg="">d20</span>';
+  h += "</td></tr></table>";
+
+  h += '<div class="row"><span class="label">Модификатор </span>' +
+       '<span class="btn small" data-act="mod" data-arg="-1">−1</span>' +
+       '<span class="btn small" data-act="mod" data-arg="1">+1</span>' +
+       '<span class="btn small" data-act="clear" data-arg="">Сброс</span></div>';
+
+  h += '<div class="pool">' + esc(formula(state)) + "</div>";
+  h += '<span class="btn roll" data-act="roll" data-arg="">Бросить</span>';
+
+  var r = state.last;
+  if (r && r.kind === "d20") {
+    h += '<div class="result"><div class="muted">' + esc(r.formula) + " · таблица</div>";
+    h += '<div class="total">' + r.total + (r.mod ? ' <span class="muted">(' + r.value + modText(r.mod) + ")</span>" : "") + "</div></div>";
+  } else if (r) {
+    h += '<div class="result"><div class="muted">' + esc(r.formula) + "</div>";
+    h += '<div class="total">' + r.total + (r.mod ? ' <span class="muted">(' + r.base + modText(r.mod) + ")</span>" : "") + "</div>" + verdict(r);
+    for (var j = 0; j < r.dice.length; j++) h += dieLine(r.dice[j], j === r.best);
+    h += "</div>";
+  }
+
+  if (state.history.length > 1) {
+    var items = [];
+    for (var k = 1; k < state.history.length; k++) {
+      var p = state.history[k];
+      if (p.kind === "d20") { items.push(p.total + " (d20)"); continue; }
+      items.push(p.total + (p.critFail ? " крит. провал" : p.success ? (p.raises ? " ↑" + p.raises : " успех") : " провал"));
+    }
+    h += '<div class="hist">Ранее: ' + items.join(" · ") + "</div>";
+  }
+  h += '<table class="footer"><tr><td><span class="toggle" data-act="license" data-arg="">' +
+       (state.license ? "▾" : "▸") + ' Savage Worlds Fan License</span></td>' +
+       '<td class="by">by <a class="tglink" href="https://t.me/hi_it_is_me_arti" target="_blank">Arti</a></td></tr></table>';
+  if (state.license) {
+    h += '<div class="license">This game references the Savage Worlds game system, available from Pinnacle Entertainment Group at ' +
+         '<a class="extlink" href="https://www.peginc.com" target="_blank">www.peginc.com</a>. Savage Worlds and all associated logos ' +
+         'and trademarks are copyrights of Pinnacle Entertainment Group. Used with permission. Pinnacle makes no representation ' +
+         'or warranty as to the quality, viability, or suitability for purpose of this product.</div>';
+  }
+  return h + "</div>";
+}
+
+
+/* ===================== АДАПТЕР (переписать под API Telegram) ===================== */
+
+var STATE = initialState();
+
+// Мини-апп Telegram: сообщаем, что готовы, и разворачиваем на весь экран.
+// Вне Telegram этот блок просто ничего не делает.
+try {
+  if (typeof Telegram !== "undefined" && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); }
+} catch (e) {}
+
+if (typeof document !== "undefined") {
+  var app = document.getElementById("app");
+  var paint = function () { app.innerHTML = render(STATE); };
+  // Поле сложности: применяем значение по Enter или при уходе с поля
+  app.addEventListener("change", function (e) {
+    if (e.target.getAttribute && e.target.getAttribute("data-input") === "tn") {
+      STATE = reduce(STATE, "tnset", e.target.value);
+      paint();
+    }
+  });
+  app.addEventListener("click", function (e) {
+    // Ссылки на Telegram внутри мини-аппа открываем средствами Telegram
+    if (e.target.className === "tglink" && typeof Telegram !== "undefined" && Telegram.WebApp && Telegram.WebApp.openTelegramLink) {
+      e.preventDefault();
+      Telegram.WebApp.openTelegramLink(e.target.href);
+      return;
+    }
+    // Внешние ссылки — во внешнем браузере
+    if (e.target.className === "extlink" && typeof Telegram !== "undefined" && Telegram.WebApp && Telegram.WebApp.openLink) {
+      e.preventDefault();
+      Telegram.WebApp.openLink(e.target.href);
+      return;
+    }
+    var el = e.target;
+    while (el && el !== app && !el.getAttribute("data-act")) el = el.parentNode;
+    if (!el || el === app) return;
+    STATE = reduce(STATE, el.getAttribute("data-act"), el.getAttribute("data-arg"));
+    paint();
+  });
+  paint();
+}
+
+if (typeof module !== "undefined") module.exports = { initialState: initialState, reduce: reduce, render: render, explode: explode };
+</script>
+</body>
+</html>
