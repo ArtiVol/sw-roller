@@ -28,7 +28,8 @@
   .row { margin: 0 0 8px 0; }
   table.pick { width: 100%; border-collapse: collapse; margin: 0 0 8px 0; }
   table.pick td { vertical-align: top; padding: 0; }
-  td.wildcell { width: 74px; padding-left: 8px; border-left: 1px solid #e1e5ea; text-align: center; }
+  table.pick td.skillcell { padding-right: 10px; }
+  table.pick td.wildcell { width: 52px; padding-left: 10px; border-left: 1px solid #e1e5ea; text-align: center; }
   .btn { display: inline-block; min-width: 34px; padding: 6px 7px; margin: 0 4px 4px 0; border: 1px solid #c9d1da;
          border-radius: 8px; background: #f6f8fa; font-size: 13px; text-align: center; cursor: pointer; }
   .btn.on { background: #b8452f; border-color: #b8452f; color: #ffffff; }
@@ -37,9 +38,15 @@
   input.tn { width: 40px; padding: 5px 4px; margin: 0 4px 4px 0; border: 1px solid #c9d1da; border-radius: 8px;
              font-size: 14px; font-weight: bold; text-align: center; background: #ffffff; color: #1f2328; }
   .count { display: inline-block; min-width: 28px; text-align: center; font-weight: bold; font-size: 14px; }
-  .wild { display: inline-block; padding: 8px 10px; border: 2px solid #d99a1e; border-radius: 10px;
-          background: #fff6e0; color: #8a5a00; font-weight: bold; font-size: 15px; margin: 0 0 5px 0; cursor: pointer; }
-  .wild.off { border: 1px solid #d6dbe1; background: #f3f4f6; color: #a0a7b0; font-weight: normal; font-size: 13px; padding: 5px 9px; }
+  /* Дикие кубы — столбиком, одного размера в любом состоянии, чтобы выбор не двигал соседей */
+  .wild { display: block; padding: 5px 0; border: 2px solid #d99a1e; border-radius: 10px; text-align: center;
+          background: #fff6e0; color: #8a5a00; font-weight: bold; font-size: 14px; margin: 0 0 5px 0; cursor: pointer; }
+  .wild.off { border-color: #d6dbe1; background: #f3f4f6; color: #a0a7b0; font-weight: normal; }
+  /* Кубы навыка — один ряд из пяти равных ячеек */
+  .sideswrap { margin: 0 -4px 4px 0; } /* компенсирует отступ последней ячейки, чтобы все кнопки были равны */
+  table.sides { width: 100%; border-collapse: collapse; }
+  table.sides td { padding: 0 4px 0 0; width: 20%; }
+  table.sides .btn { display: block; min-width: 0; margin: 0; padding: 6px 0; }
   .divider { border-top: 1px solid #e1e5ea; margin: 3px 0 7px 0; }
   .d20 { display: inline-block; padding: 7px 8px; border: 1px solid #8a94a3; border-radius: 10px;
          background: #f6f8fa; color: #1f2328; font-weight: bold; font-size: 14px; cursor: pointer; }
@@ -183,15 +190,15 @@ function dieLine(d, isBest) {
 function render(state) {
   var h = '<div class="bubble"><div class="title">🎲 Savage Worlds</div>';
 
-  h += '<table class="pick"><tr><td>';
+  h += '<table class="pick"><tr><td class="skillcell">';
   h += '<div class="label">Кубы навыка</div><div class="row">';
   h += '<span class="btn small" data-act="count" data-arg="-1">−</span><span class="count">' + state.count +
-       '</span><span class="btn small" data-act="count" data-arg="1">+</span></div><div>';
+       '</span><span class="btn small" data-act="count" data-arg="1">+</span></div><div class="sideswrap"><table class="sides"><tr>';
   for (var i = 0; i < SIDES.length; i++) {
-    h += '<span class="btn' + (state.sides === SIDES[i] ? " on" : "") + '" data-act="sides" data-arg="' + SIDES[i] +
-         '">d' + SIDES[i] + "</span>";
+    h += '<td><span class="btn' + (state.sides === SIDES[i] ? " on" : "") +
+         '" data-act="sides" data-arg="' + SIDES[i] + '">d' + SIDES[i] + "</span></td>";
   }
-  h += '</div><div class="label tnlabel">Сложность</div><div>' +
+  h += '</tr></table></div><div class="label tnlabel">Сложность</div><div>' +
        '<span class="btn small" data-act="tn" data-arg="-1">−</span>' +
        '<input class="tn" type="number" min="1" max="99" data-input="tn" value="' + state.tn + '">' +
        '<span class="btn small" data-act="tn" data-arg="1">+</span></div>';
